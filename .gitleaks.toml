@@ -1,0 +1,30 @@
+title = "DevUps Growth OS secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[a-zA-Z0-9_\-]{20,}'''
+keywords = ["sk-ant"]
+
+[[rules]]
+id = "postgres-url-with-password"
+description = "Postgres connection string carrying a real password"
+regex = '''postgres(?:ql)?://[^:\s]+:(?!password\b)[^@\s]{8,}@'''
+keywords = ["postgres://", "postgresql://"]
+
+[allowlist]
+description = "Documentation placeholders and fixtures"
+paths = [
+  '''\.env\.example$''',
+  '''^README\.md$''',
+  '''^docs/''',
+  '''^tests/''',
+]
+regexes = [
+  # The dummy hash the login route compares against when no user exists; it is
+  # all-zero key material and authenticates nothing.
+  '''scrypt\$16384\$8\$1\$A+==\$A+=''',
+]

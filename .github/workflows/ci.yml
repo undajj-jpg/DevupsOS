@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Definition of Done (spec §9): tests, lint, type-check and secret-scan must
+# all be green, and no secret may ever reach the repository.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Build-time placeholders only. Nothing connects to a database during
+          # `next build`; the real values come from the secrets manager.
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          SESSION_SECRET: ci-placeholder-secret-value-at-least-32-chars
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: devups_ci
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Applying every migration against a real Postgres is the only way to
+      # know the RLS policies and SECURITY DEFINER functions actually parse.
+      - name: Apply migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/devups_ci
+
+      # Migrations run as the owner; the application must not. Give the app
+      # role a password so the rest of the job connects the way production
+      # does — as a NOSUPERUSER, NOBYPASSRLS role that RLS actually binds.
+      - name: Enable login for the application role
+        run: |
+          psql "$ADMIN_URL" -c "ALTER ROLE devups_app LOGIN PASSWORD 'ci';"
+        env:
+          ADMIN_URL: postgres://postgres:postgres@localhost:5432/devups_ci
+
+      # Fails if RLS is missing or unforced on any tenant table, or if the
+      # connecting role can bypass RLS at all.
+      - name: Verify RLS
+        run: npm run db:verify-rls
+        env:
+          DATABASE_URL: postgres://devups_app:ci@localhost:5432/devups_ci
+
+      # Proves the boundary end to end: two orgs, cross-tenant reads and writes.
+      - name: RLS isolation tests
+        run: npx vitest run tests/rls.integration.test.ts
+        env:
+          TEST_DATABASE_URL: postgres://devups_app:ci@localhost:5432/devups_ci
