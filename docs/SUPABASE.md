@@ -92,3 +92,22 @@ Two things to keep true:
 
 `pgvector` is available on Supabase and will be needed for Fase 3 (unified
 memory). Nothing today requires it.
+
+## If the schema was applied outside this runner
+
+Applying migrations through the Supabase dashboard, the Supabase MCP connector,
+or `supabase db push` records them in Supabase's own
+`supabase_migrations.schema_migrations` table — not in this project's
+`_migrations` ledger. The two are independent, so a later `npm run db:migrate`
+would try to re-run `0000_init.sql` against tables that already exist and fail.
+
+Reconcile the ledger once, then continue using `db:migrate` normally:
+
+```bash
+DATABASE_URL='<owner connection string>' npm run db:baseline
+# → marked 0000_init.sql as applied ... (etc)
+```
+
+`db:baseline` only writes bookkeeping rows; it never executes SQL. Confirm the
+schema itself is right with `db:verify-rls`, which inspects the live catalog
+rather than trusting either ledger.

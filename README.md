@@ -83,6 +83,7 @@ bypass RLS. See [`docs/SUPABASE.md`](docs/SUPABASE.md).
 | `npm run lint` | ESLint |
 | `npm run verify` | typecheck + lint + tests |
 | `npm run db:migrate` | Apply migrations in order, exactly once each |
+| `npm run db:baseline` | Mark migrations applied without running them (schema created elsewhere) |
 | `npm run db:verify-rls` | Assert RLS is enabled, forced, and unbypassable |
 | `npm run db:seed` | Seed a development org (refuses in production) |
 
