@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Badge } from '@/components/ui';
+import { Badge, Button, Eyebrow } from '@/components/ui';
 
 export type AgentRow = {
   key: string;
@@ -26,101 +26,134 @@ export function AgentControls({
   agents: AgentRow[];
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function patch(body: Record<string, unknown>) {
-    setBusy(true);
+  async function patch(body: Record<string, unknown>, tag: string) {
+    setBusy(tag);
     setError(null);
     const res = await fetch('/api/agents', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
-    setBusy(false);
+    setBusy(null);
     if (!res.ok) {
       const payload = await res.json().catch(() => null);
-      setError(payload?.error?.message ?? 'Update failed');
+      setError(payload?.error?.message ?? 'No se pudo actualizar');
       return;
     }
     router.refresh();
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-[var(--color-line)] p-4 dark:border-white/10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium">Global kill switch</div>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              When engaged, every agent stops acting immediately. `pause` remains
-              reachable so the machine can always be stopped.
+    <div className="space-y-5">
+      <div
+        className={`rounded-xl border p-5 ${
+          globalEnabled ? 'border-line bg-raised' : 'border-danger/30 bg-danger-soft'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0 max-w-lg">
+            <Eyebrow>Kill switch global · §3.5</Eyebrow>
+            <p className="mt-1.5 text-[14.5px] leading-relaxed text-ink-soft">
+              Con el switch activado ningún agente actúa. <code className="font-mono text-[13px] text-accent-ink">pause</code>{' '}
+              sigue disponible, porque detener la máquina tiene que funcionar
+              incluso cuando la máquina está detenida.
             </p>
           </div>
-          <button
-            type="button"
-            disabled={!canEdit || busy}
-            onClick={() => patch({ globalEnabled: !globalEnabled })}
-            className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
-              globalEnabled ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-ok)]'
-            }`}
+          <Button
+            variant={globalEnabled ? 'danger' : 'ok'}
+            disabled={!canEdit || busy !== null}
+            onClick={() => patch({ globalEnabled: !globalEnabled }, 'global')}
           >
-            {globalEnabled ? 'Engage kill switch' : 'Release kill switch'}
-          </button>
+            {busy === 'global'
+              ? '…'
+              : globalEnabled
+                ? 'Detener todo'
+                : 'Reactivar'}
+          </Button>
         </div>
       </div>
 
       {!gatePassed && (
-        <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-[var(--color-warn)] dark:bg-amber-500/10">
-          The autonomy gate has not been passed, so switching an agent to
-          autonomous is refused. Every agent runs in suggestion mode.
-          {forceSuggestionMode &&
-            ' FORCE_SUGGESTION_MODE is also set, which pins suggestion mode regardless of database state.'}
-        </p>
+        <div className="rounded-xl border border-warn/30 bg-warn-soft px-5 py-4">
+          <Eyebrow className="text-warn">Puerta cerrada</Eyebrow>
+          <p className="mt-1.5 text-[14.5px] leading-relaxed text-ink-soft">
+            La puerta de autonomía no fue superada, así que pasar un agente a
+            autónomo se rechaza. Todos corren en modo sugerencia.
+            {forceSuggestionMode &&
+              ' Además FORCE_SUGGESTION_MODE está activo, lo que fija el modo sugerencia sin importar el estado en base de datos.'}
+          </p>
+        </div>
       )}
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-[var(--color-danger)] dark:bg-red-500/10">
+        <p className="rounded-xl border border-danger/30 bg-danger-soft px-5 py-3 font-mono text-[12px] text-danger">
           {error}
         </p>
       )}
 
-      <ul className="space-y-3">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {agents.map((agent) => (
           <li
             key={agent.key}
-            className="rounded-lg border border-[var(--color-line)] p-4 dark:border-white/10"
+            className={`rounded-xl border p-4 ${
+              agent.enabled ? 'border-line bg-raised' : 'border-line bg-canvas'
+            }`}
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{agent.name}</span>
-                  <Badge tone={agent.mode === 'autonomous' ? 'warn' : 'neutral'}>
-                    {agent.mode}
-                  </Badge>
-                  {!agent.enabled && <Badge tone="danger">disabled</Badge>}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {agent.allowedTools.map((tool) => (
-                    <code
-                      key={tool}
-                      className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-white/10"
-                    >
-                      {tool}
-                    </code>
-                  ))}
+                <h3 className="font-display text-[16px] leading-snug font-semibold text-ink">
+                  {agent.name}
+                </h3>
+                <div className="mt-0.5 font-mono text-[10.5px] tracking-[0.1em] text-muted">
+                  {agent.key}
                 </div>
               </div>
-              <button
-                type="button"
-                disabled={!canEdit || busy}
+              <Badge tone={agent.mode === 'autonomous' ? 'warn' : 'neutral'}>
+                {agent.mode === 'autonomous' ? 'autónomo' : 'sugiere'}
+              </Badge>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {agent.allowedTools.map((tool) => (
+                <code
+                  key={tool}
+                  className="rounded-md border border-line-soft bg-canvas px-1.5 py-0.5 font-mono text-[10.5px] text-ink-soft"
+                >
+                  {tool}
+                </code>
+              ))}
+              {agent.allowedTools.length === 0 && (
+                <span className="font-mono text-[10.5px] text-muted">
+                  sin herramientas
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-line-soft pt-3">
+              {agent.enabled ? (
+                <Badge tone="ok" dot>
+                  activo
+                </Badge>
+              ) : (
+                <Badge tone="danger" dot>
+                  detenido
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                disabled={!canEdit || busy !== null}
                 onClick={() =>
-                  patch({ agent: { key: agent.key, enabled: !agent.enabled } })
+                  patch(
+                    { agent: { key: agent.key, enabled: !agent.enabled } },
+                    agent.key,
+                  )
                 }
-                className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm disabled:opacity-50 dark:border-white/15"
               >
-                {agent.enabled ? 'Disable' : 'Enable'}
-              </button>
+                {busy === agent.key ? '…' : agent.enabled ? 'Detener' : 'Activar'}
+              </Button>
             </div>
           </li>
         ))}

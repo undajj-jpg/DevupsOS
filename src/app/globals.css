@@ -1,30 +1,139 @@
 @import 'tailwindcss';
 
+/**
+ * Editorial warm palette.
+ *
+ * Two type roles, deliberately: a serif carries content (headlines, body,
+ * table cells) and a monospace carries metadata (labels, timestamps, IDs,
+ * boletín numbers). Legislative work is full of identifiers that need to line
+ * up and be read character by character — mono earns its place rather than
+ * being decoration.
+ */
 @theme {
-  --color-ink: #0d1117;
-  --color-surface: #ffffff;
-  --color-muted: #5b6672;
-  --color-line: #e3e8ef;
-  --color-accent: #2f6df6;
-  --color-warn: #b45309;
-  --color-danger: #b42318;
-  --color-ok: #047857;
+  --color-canvas: #f5f2ec;
+  --color-surface: #fffdfa;
+  --color-raised: #ffffff;
+  --color-ink: #2b2723;
+  --color-ink-soft: #57504a;
+  --color-muted: #8b8078;
+  --color-line: #e7e0d5;
+  --color-line-soft: #f0eae0;
+
+  --color-accent: #c0602c;
+  --color-accent-ink: #9c4a1e;
+  --color-accent-soft: #f8ebe0;
+
+  --color-ok: #4e7a5c;
+  --color-ok-soft: #e8f0e9;
+  --color-warn: #a8752a;
+  --color-warn-soft: #f7eeda;
+  --color-danger: #a63f2b;
+  --color-danger-soft: #f8e6e1;
+
+  --font-display: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+  --font-serif: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-mono-face), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --shadow-card: 0 1px 2px rgba(43, 39, 35, 0.04),
+    0 10px 30px -18px rgba(43, 39, 35, 0.18);
+  --shadow-lift: 0 2px 4px rgba(43, 39, 35, 0.05),
+    0 18px 40px -20px rgba(43, 39, 35, 0.24);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #17130f;
+    --color-surface: #201b16;
+    --color-raised: #262019;
+    --color-ink: #efe7dc;
+    --color-ink-soft: #c8bcae;
+    --color-muted: #96897b;
+    --color-line: #342b23;
+    --color-line-soft: #2a221c;
+
+    --color-accent: #e08a55;
+    --color-accent-ink: #eda577;
+    --color-accent-soft: #33241a;
+
+    --color-ok: #7faa8b;
+    --color-ok-soft: #1f2a22;
+    --color-warn: #d0a457;
+    --color-warn-soft: #2e2517;
+    --color-danger: #d87c66;
+    --color-danger-soft: #31201b;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4),
+      0 10px 30px -18px rgba(0, 0, 0, 0.7);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45),
+      0 18px 40px -20px rgba(0, 0, 0, 0.8);
+  }
 }
 
 :root {
   color-scheme: light dark;
 }
 
-body {
-  background: #f7f8fa;
-  color: var(--color-ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  -webkit-font-smoothing: antialiased;
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #0d1117;
-    color: #e6edf3;
+body {
+  background-color: var(--color-canvas);
+  /* A barely-there warm wash so large empty areas read as paper, not as a
+     flat fill. Kept under 3% so it never competes with content. */
+  background-image: radial-gradient(
+    115% 85% at 50% 0%,
+    rgba(192, 96, 44, 0.05) 0%,
+    rgba(192, 96, 44, 0) 60%
+  );
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+/* Numerals in tables and stat tiles must align vertically. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.86);
+  }
+}
+
+.live-dot {
+  animation: pulse-dot 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

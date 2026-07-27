@@ -1,57 +1,88 @@
-import { Badge, Card, Empty, Table } from '@/components/ui';
+import { Badge, Card, Empty, Eyebrow, PageHeader } from '@/components/ui';
 import { loadReplies, requirePageSession } from '@/lib/server-data';
 
 export const dynamic = 'force-dynamic';
 
-const TONE: Record<string, string> = {
-  interested: 'ok',
-  referral: 'ok',
-  unsubscribe: 'danger',
-  not_interested: 'warn',
+const CATEGORY: Record<string, { label: string; tone: string; icon: string }> = {
+  interested: { label: 'interesado', tone: 'ok', icon: '◆' },
+  referral: { label: 'derivación', tone: 'ok', icon: '↗' },
+  not_interested: { label: 'no interesado', tone: 'warn', icon: '○' },
+  unsubscribe: { label: 'baja', tone: 'danger', icon: '⊘' },
+  out_of_office: { label: 'fuera de oficina', tone: 'neutral', icon: '◷' },
+  auto_reply: { label: 'automática', tone: 'neutral', icon: '⟳' },
+  other: { label: 'otra', tone: 'neutral', icon: '•' },
 };
 
 export default async function RepliesPage() {
   const session = await requirePageSession();
   const rows = await loadReplies(session);
 
+  const unhandled = rows.filter((r) => !r.handled).length;
+
   return (
-    <Card
-      title="Replies"
-      description="Classified on arrival. An opt-out suppresses the address and cuts the cadence before anything else runs."
-    >
-      {rows.length === 0 ? (
-        <Empty>No replies yet.</Empty>
-      ) : (
-        <Table head={['Contact', 'Category', 'Close prob.', 'Message']}>
-          {rows.map((reply) => (
-            <tr
-              key={reply.id}
-              className="border-b border-[var(--color-line)] align-top last:border-0 dark:border-white/10"
-            >
-              <td className="py-3">
-                <div className="font-medium">{reply.contactName}</div>
-                <div className="text-xs text-[var(--color-muted)]">
-                  {reply.contactEmail}
-                </div>
-              </td>
-              <td className="py-3">
-                <Badge tone={TONE[reply.category ?? ''] ?? 'neutral'}>
-                  {reply.category ?? 'unclassified'}
-                </Badge>
-              </td>
-              <td className="py-3 tabular-nums">
-                {reply.closeProbability === null
-                  ? '—'
-                  : `${Math.round(reply.closeProbability * 100)}%`}
-              </td>
-              <td className="max-w-md py-3 text-xs text-[var(--color-muted)]">
-                {reply.body.slice(0, 300)}
-                {reply.body.length > 300 ? '…' : ''}
-              </td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </Card>
+    <>
+      <PageHeader
+        eyebrow={<Eyebrow>Triage · entrada no confiable</Eyebrow>}
+        title="Respuestas"
+        lede="Clasificadas al llegar. La detección de baja es determinista y le gana al modelo: una baja suprime la dirección y corta la cadencia antes que cualquier otra cosa."
+      />
+
+      <Card
+        title="Bandeja"
+        aside={
+          <span className="font-mono text-[12px] text-muted">
+            {unhandled} sin atender · {rows.length} total
+          </span>
+        }
+      >
+        {rows.length === 0 ? (
+          <Empty>Todavía no hay respuestas.</Empty>
+        ) : (
+          <ul className="divide-y divide-line-soft">
+            {rows.map((reply) => {
+              const meta = CATEGORY[reply.category ?? 'other'] ?? CATEGORY.other!;
+              return (
+                <li key={reply.id} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[15px] text-ink">
+                          {reply.contactName}
+                        </span>
+                        <Badge tone={meta.tone}>
+                          <span aria-hidden>{meta.icon}</span>
+                          {meta.label}
+                        </Badge>
+                        {!reply.handled && <Badge tone="accent">sin atender</Badge>}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[11.5px] text-muted">
+                        {reply.contactEmail}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="tabular font-mono text-[13px] text-ink-soft">
+                        {reply.closeProbability === null
+                          ? '—'
+                          : `${Math.round(reply.closeProbability * 100)}%`}
+                      </div>
+                      <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+                        prob. cierre
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-line-soft bg-canvas px-4 py-3">
+                    <p className="text-[14px] leading-relaxed text-ink-soft">
+                      {reply.body.slice(0, 400)}
+                      {reply.body.length > 400 ? '…' : ''}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+    </>
   );
 }

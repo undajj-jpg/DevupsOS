@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Badge } from '@/components/ui';
+import { Badge, Button } from '@/components/ui';
 
 export type Draft = {
   id: string;
@@ -19,6 +19,8 @@ export function ApprovalList({ drafts }: { drafts: Draft[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const allSelected = selected.size === drafts.length && drafts.length > 0;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -44,7 +46,7 @@ export function ApprovalList({ drafts }: { drafts: Draft[] }) {
 
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      setError(body?.error?.message ?? 'Approval failed');
+      setError(body?.error?.message ?? 'No se pudo aprobar');
       return;
     }
 
@@ -54,54 +56,73 @@ export function ApprovalList({ drafts }: { drafts: Draft[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={approve}
-          disabled={busy || selected.size === 0}
-          className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      <div className="flex flex-wrap items-center gap-3 border-b border-line-soft pb-4">
+        <Button onClick={approve} disabled={busy || selected.size === 0}>
+          {busy
+            ? 'Aprobando…'
+            : selected.size > 0
+              ? `Aprobar ${selected.size}`
+              : 'Aprobar'}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            setSelected(allSelected ? new Set() : new Set(drafts.map((d) => d.id)))
+          }
         >
-          {busy ? 'Approving…' : `Approve ${selected.size || ''}`.trim()}
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelected(new Set(drafts.map((d) => d.id)))}
-          className="text-sm text-[var(--color-accent)] underline"
-        >
-          Select all
-        </button>
-        {error && <span className="text-sm text-[var(--color-danger)]">{error}</span>}
+          {allSelected ? 'Ninguno' : 'Todos'}
+        </Button>
+        {error && (
+          <span className="font-mono text-[11px] text-danger">{error}</span>
+        )}
       </div>
 
       <ul className="space-y-3">
-        {drafts.map((draft) => (
-          <li
-            key={draft.id}
-            className="rounded-lg border border-[var(--color-line)] p-4 dark:border-white/10"
-          >
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={selected.has(draft.id)}
-                onChange={() => toggle(draft.id)}
-                className="mt-1"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{draft.subject}</span>
-                  {draft.variantKey && <Badge>variant {draft.variantKey}</Badge>}
+        {drafts.map((draft) => {
+          const checked = selected.has(draft.id);
+          return (
+            <li key={draft.id}>
+              <label
+                className={`block cursor-pointer rounded-xl border p-4 transition-colors ${
+                  checked
+                    ? 'border-accent/40 bg-accent-soft/40'
+                    : 'border-line bg-raised hover:border-line'
+                }`}
+              >
+                <div className="flex items-start gap-3.5">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(draft.id)}
+                    className="mt-1.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-display text-[17px] leading-snug font-semibold text-ink">
+                        {draft.subject}
+                      </h3>
+                      {draft.variantKey && (
+                        <Badge tone="neutral">var {draft.variantKey}</Badge>
+                      )}
+                      <Badge tone="warn">sin enviar</Badge>
+                    </div>
+
+                    <div className="mt-1 font-mono text-[11.5px] text-muted">
+                      {draft.contactName} · {draft.contactEmail}
+                      {draft.company ? ` · ${draft.company}` : ''}
+                    </div>
+
+                    <div className="mt-3 border-l-2 border-line pl-4">
+                      <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap text-ink-soft">
+                        {draft.body}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-0.5 text-xs text-[var(--color-muted)]">
-                  {draft.contactName} · {draft.contactEmail}
-                  {draft.company ? ` · ${draft.company}` : ''}
-                </div>
-                <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm text-[var(--color-muted)]">
-                  {draft.body}
-                </pre>
-              </div>
-            </label>
-          </li>
-        ))}
+              </label>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

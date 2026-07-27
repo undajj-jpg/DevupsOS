@@ -4,6 +4,7 @@ import { planFollowUps, shouldCancelCadence } from '@/core/cadence';
 import { prioritize, scoreLead } from '@/core/scoring';
 import { backoffMs } from '@/lib/queue';
 import { emailDomain, isFreemail, isValidEmail } from '@/core/email';
+import { sortByStage, stageLabel } from '@/core/stages';
 
 describe('password hashing', () => {
   it('round-trips a correct password', async () => {
@@ -117,5 +118,33 @@ describe('email helpers', () => {
   it('identifies freemail providers', () => {
     expect(isFreemail('a@gmail.com')).toBe(true);
     expect(isFreemail('a@acme.com')).toBe(false);
+  });
+});
+
+describe('funnel stage ordering', () => {
+  it('renders the pipeline in funnel order, not GROUP BY order', () => {
+    // A SQL GROUP BY returns rows in planner order; the funnel must not.
+    const scrambled = [
+      { stage: 'lost' },
+      { stage: 'new' },
+      { stage: 'won' },
+      { stage: 'queued' },
+    ];
+    expect(sortByStage(scrambled).map((s) => s.stage)).toEqual([
+      'new',
+      'queued',
+      'won',
+      'lost',
+    ]);
+  });
+
+  it('puts unknown stages last rather than dropping them', () => {
+    const rows = [{ stage: 'custom' }, { stage: 'new' }];
+    expect(sortByStage(rows).map((s) => s.stage)).toEqual(['new', 'custom']);
+  });
+
+  it('falls back to the raw key when a stage has no label', () => {
+    expect(stageLabel('new')).toBe('Nuevos');
+    expect(stageLabel('bespoke')).toBe('bespoke');
   });
 });
