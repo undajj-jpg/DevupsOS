@@ -8,6 +8,10 @@ Any Postgres 14+ works. Neon, Supabase and Vercel Postgres are all fine —
 Take the **pooled** connection string; serverless opens and drops connections
 constantly and will exhaust a direct-connection limit.
 
+**Using Supabase? Read [`SUPABASE.md`](SUPABASE.md) first.** Its `postgres` role
+can bypass RLS, so pointing `DATABASE_URL` at it would silently disable tenant
+isolation while the app appears to work perfectly.
+
 ## 2. Run migrations, then create the application role
 
 Migrations run as the database **owner**. The application must not.

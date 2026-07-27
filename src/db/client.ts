@@ -13,6 +13,11 @@ function connection(): postgres.Sql {
       max: 3,
       idle_timeout: 20,
       connect_timeout: 10,
+      // Required behind a transaction-mode pooler (Supabase Supavisor on port
+      // 6543, PgBouncer, Neon's pooled endpoint): a prepared statement is
+      // bound to a server connection, and transaction pooling hands out a
+      // different one per transaction, so a cached statement handle would
+      // eventually be sent to a connection that has never seen it.
       prepare: false,
     });
   }

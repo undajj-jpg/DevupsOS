@@ -69,6 +69,9 @@ ALTER ROLE devups_app LOGIN PASSWORD '<generated>';
 or if any tenant table is missing `ENABLE`/`FORCE ROW LEVEL SECURITY` or a
 policy.
 
+On Supabase this matters more than usual — its default `postgres` role can
+bypass RLS. See [`docs/SUPABASE.md`](docs/SUPABASE.md).
+
 ## Commands
 
 | Command | Purpose |
