@@ -22,6 +22,18 @@ export const REPLY_CATEGORIES = [
 
 export type ReplyCategory = (typeof REPLY_CATEGORIES)[number];
 
+/**
+ * Categories that count as a positive reply in conversion reporting.
+ *
+ * A referral is a positive outcome even though the person answering is not the
+ * buyer — it produces a new lead with a warm introduction, which is worth more
+ * than a polite "not now" from the original target.
+ */
+export const POSITIVE_REPLY_CATEGORIES: readonly ReplyCategory[] = [
+  'interested',
+  'referral',
+];
+
 export type Classification = {
   category: ReplyCategory;
   sentiment: 'positive' | 'neutral' | 'negative';

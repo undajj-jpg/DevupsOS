@@ -3,10 +3,12 @@ import { z } from 'zod';
 import {
   agents,
   contacts,
+  funnels,
   leads,
   mailboxes,
   messages,
   orgs,
+  outcomes,
   replies,
   suppression,
 } from '@/db/schema';
@@ -27,6 +29,12 @@ import { normalizeEmail } from '@/core/email';
 import { checkAntiResend } from '@/core/dedupe';
 import { contactedRegistry } from '@/db/schema';
 import { resolveAgentMode, requiresHumanApproval } from '@/core/autonomy';
+import {
+  checkStageTransition,
+  funnelStages,
+  OUTCOME_FOR_STAGE,
+} from '@/core/pipeline';
+import { analyticsFor, boardFor } from '@/lib/reporting';
 import { trace } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -327,6 +335,102 @@ const tools: Record<string, Tool> = {
         unhandledReplies: unhandled[0]?.n ?? 0,
       };
     },
+  },
+
+  list_funnels: {
+    description: 'Configured funnels and their ordered stages.',
+    agents: ['orchestrator', 'triage', 'briefing', 'concierge'],
+    input: z.object({}).strict(),
+    run: async ({ tx, orgId }) => {
+      const board = await boardFor(tx, orgId);
+      return { funnels: board.funnels, stages: board.stages };
+    },
+  },
+
+  get_board: {
+    description: 'Kanban board for a funnel: leads grouped into stage columns.',
+    agents: ['orchestrator', 'triage', 'briefing', 'concierge'],
+    input: z.object({ funnelId: z.string().uuid().optional() }),
+    run: async ({ tx, orgId }, input: { funnelId?: string }) => {
+      const board = await boardFor(tx, orgId, input.funnelId);
+      return {
+        funnel: board.selected,
+        total: board.total,
+        columns: board.columns.map((c) => ({
+          stage: c.key,
+          label: c.label,
+          count: c.cards.length,
+          leads: c.cards.map((card) => ({
+            leadId: card.id,
+            name: card.fullName,
+            company: card.company,
+            score: card.score,
+            closeProbability: card.closeProbability,
+            tags: card.tags,
+          })),
+        })),
+      };
+    },
+  },
+
+  move_lead: {
+    description: "Moves a lead to another stage of its funnel.",
+    agents: ['triage', 'scheduler', 'orchestrator'],
+    // Reversible on paper, but reaching `meeting`, `won` or `lost` writes an
+    // append-only outcome row that the conversion report counts — an agent that
+    // could move leads at will could also move the numbers.
+    irreversible: true,
+    input: z.object({
+      leadId: z.string().uuid(),
+      stage: z.string().min(1).max(64),
+    }),
+    run: async ({ tx, orgId }, input: { leadId: string; stage: string }) => {
+      const [lead] = await tx
+        .select({ stage: leads.stage, funnelId: leads.funnelId })
+        .from(leads)
+        .where(and(eq(leads.orgId, orgId), eq(leads.id, input.leadId)))
+        .limit(1);
+      if (!lead) throw new HttpError(404, 'lead not found', 'not_found');
+
+      const [funnel] = lead.funnelId
+        ? await tx
+            .select({ stages: funnels.stages })
+            .from(funnels)
+            .where(and(eq(funnels.orgId, orgId), eq(funnels.id, lead.funnelId)))
+            .limit(1)
+        : [];
+
+      const transition = checkStageTransition(
+        lead.stage,
+        input.stage,
+        funnelStages(funnel ?? null),
+      );
+      if (!transition.allowed) {
+        throw new HttpError(422, transition.detail, 'invalid_transition');
+      }
+
+      await tx
+        .update(leads)
+        .set({ stage: input.stage, updatedAt: new Date() })
+        .where(and(eq(leads.orgId, orgId), eq(leads.id, input.leadId)));
+
+      const kind = OUTCOME_FOR_STAGE[input.stage];
+      if (kind) {
+        await tx
+          .insert(outcomes)
+          .values({ orgId, leadId: input.leadId, kind });
+      }
+
+      return { leadId: input.leadId, from: lead.stage, to: input.stage };
+    },
+  },
+
+  get_analytics: {
+    description:
+      'Conversion funnel from sent to closed, model spend, and A/B results.',
+    agents: ['orchestrator', 'briefing', 'concierge', 'deliverability'],
+    input: z.object({}).strict(),
+    run: async ({ tx, orgId }) => analyticsFor(tx, orgId),
   },
 };
 

@@ -92,6 +92,9 @@ export const IRREVERSIBLE_ACTIONS = new Set([
   'book_meeting',
   'add_suppression',
   'import_leads',
+  // Reversible on paper, but reaching meeting/won/lost writes an append-only
+  // outcome row that the conversion report counts.
+  'move_lead',
   'delete_lead',
   'run_dsr_delete',
 ]);

@@ -5,8 +5,10 @@ verify addresses, draft personalized first touches, triage replies, and hand a
 human the decision to actually send anything.
 
 Built from `specs/master-build-spec.md` in the order that spec prescribes —
-Fase 0 (foundation) and Fase 1 (núcleo) are implemented. Fases 2–4 are not, and
-the reasons are in [`docs/STATUS.md`](docs/STATUS.md).
+Fase 0 (foundation) and Fase 1 (núcleo) are implemented, plus the first slice of
+Fase 2 (pipeline board, conversion economics). The full module compendium is
+`specs/plataforma-completa.md`; what is and is not built from it, and why, is in
+[`docs/STATUS.md`](docs/STATUS.md).
 
 ## What actually works today
 
@@ -14,8 +16,10 @@ the reasons are in [`docs/STATUS.md`](docs/STATUS.md).
   leads, funnels, messages, replies, follow-ups, suppression, agents, jobs,
   audit log. Isolation is enforced by Postgres RLS, not by application code.
 - **Blocking pre-send compliance** — suppression (address and whole-domain),
-  the anti-resend registry, per-lead idempotency keys, and reply-cuts-cadence.
-  A lead blocked by any of these never even consumes a mailbox slot.
+  relationship blocking (current customers, partners, and colleagues of anyone
+  already in a live deal), the anti-resend registry, per-lead idempotency keys,
+  and reply-cuts-cadence. A lead blocked by any of these never even consumes a
+  mailbox slot.
 - **Multi-mailbox sending discipline** — warmup schedule, per-mailbox daily
   caps, health scoring, rotation, and primary-domain isolation.
 - **Signal-based personalization** — the first touch cites the lead's real
@@ -25,6 +29,12 @@ the reasons are in [`docs/STATUS.md`](docs/STATUS.md).
   with the deterministic result taking precedence.
 - **Human-in-the-loop** — batches produce `pending_approval` drafts. Approval
   is the only transition to `queued`, and no agent can perform it.
+- **Pipeline board** — kanban over a funnel's own stages, drag-and-drop plus a
+  keyboard-reachable equivalent. Every move is audited, and the stages the batch
+  owns cannot be set by hand.
+- **Conversion economics** — the funnel from sent through replied, positive,
+  meeting and closed, counted from append-only events rather than current stage,
+  with A/B variant comparison and a minimum-sample significance test.
 - **Agent governance** — 13 agents with per-agent tool allow-lists, global and
   per-agent kill switches, and a blocking autonomy gate.
 - **MCP surface** — bearer-authenticated tool endpoint with per-agent

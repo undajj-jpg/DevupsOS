@@ -1,5 +1,6 @@
 import { and, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
+  accounts,
   contactedRegistry,
   contacts,
   domains,
@@ -33,9 +34,22 @@ import { normalizeEmail } from './email';
 export type BatchCandidate = {
   leadId: string;
   contactId: string;
+  accountId: string | null;
   email: string;
   score: number;
   optIn: boolean;
+};
+
+/** Per-account relationship state, keyed by account id. */
+export type AccountState = {
+  name: string;
+  relationship: string;
+  /**
+   * Every lead on this account with its stage. Kept as pairs rather than a bare
+   * stage list so a candidate can be excluded from its own sibling check — a
+   * lead must not block itself.
+   */
+  leadStages: { leadId: string; stage: string }[];
 };
 
 export type BatchSkip = {
@@ -65,6 +79,7 @@ export type PlanInput = {
   candidates: readonly BatchCandidate[];
   mailboxes: readonly Mailbox[];
   suppressionEntries: readonly { value: string; reason: string }[];
+  accounts: ReadonlyMap<string, AccountState>;
   registry: ReadonlyMap<
     string,
     { email: string; lastContactedAt: Date; timesContacted: number }
@@ -100,6 +115,10 @@ export function planBatch(input: PlanInput): BatchPlan {
       step,
     });
 
+    const account = candidate.accountId
+      ? input.accounts.get(candidate.accountId)
+      : undefined;
+
     const eligibility = checkSendEligibility({
       email,
       existingMessageForKey: input.existingKeys.has(dedupeKey)
@@ -107,6 +126,15 @@ export function planBatch(input: PlanInput): BatchPlan {
         : null,
       suppression: input.suppressionEntries,
       registryEntry: input.registry.get(email) ?? null,
+      relationship: account
+        ? {
+            relationship: account.relationship,
+            accountName: account.name,
+            siblingStages: account.leadStages
+              .filter((l) => l.leadId !== candidate.leadId)
+              .map((l) => l.stage),
+          }
+        : undefined,
       optIn: candidate.optIn,
       hasReplied: input.repliedLeadIds.has(candidate.leadId),
       now,
@@ -161,6 +189,7 @@ export async function loadBatchInputs(
     .select({
       leadId: leads.id,
       contactId: leads.contactId,
+      accountId: leads.accountId,
       email: contacts.email,
       score: leads.score,
       optIn: leads.optIn,
@@ -231,6 +260,57 @@ export async function loadBatchInputs(
     .from(suppression)
     .where(eq(suppression.orgId, orgId));
 
+  // Relationship state for the accounts in play. Two queries rather than a join
+  // on the candidate rows, because the sibling-stage check needs *every* lead on
+  // the account — including ones that are not batch candidates, which is exactly
+  // the case that matters (a colleague already at "meeting").
+  const accountIds = [
+    ...new Set(
+      candidateRows
+        .map((c) => c.accountId)
+        .filter((a): a is string => a !== null),
+    ),
+  ];
+
+  const accountRows =
+    accountIds.length > 0
+      ? await tx
+          .select({
+            id: accounts.id,
+            name: accounts.name,
+            relationship: accounts.relationship,
+          })
+          .from(accounts)
+          .where(
+            and(eq(accounts.orgId, orgId), inArray(accounts.id, accountIds)),
+          )
+      : [];
+
+  const accountLeadRows =
+    accountIds.length > 0
+      ? await tx
+          .select({
+            leadId: leads.id,
+            accountId: leads.accountId,
+            stage: leads.stage,
+          })
+          .from(leads)
+          .where(and(eq(leads.orgId, orgId), inArray(leads.accountId, accountIds)))
+      : [];
+
+  const accountState = new Map<string, AccountState>(
+    accountRows.map((a) => [
+      a.id,
+      { name: a.name, relationship: a.relationship, leadStages: [] },
+    ]),
+  );
+  for (const row of accountLeadRows) {
+    if (!row.accountId) continue;
+    accountState
+      .get(row.accountId)
+      ?.leadStages.push({ leadId: row.leadId, stage: row.stage });
+  }
+
   const emails = candidateRows.map((c) => normalizeEmail(c.email));
   const registryRows =
     emails.length > 0
@@ -270,12 +350,14 @@ export async function loadBatchInputs(
     candidates: candidateRows.map((c) => ({
       leadId: c.leadId,
       contactId: c.contactId,
+      accountId: c.accountId,
       email: c.email,
       score: c.score,
       optIn: c.optIn,
     })),
     mailboxes: mailboxList,
     suppressionEntries: suppressionRows,
+    accounts: accountState,
     registry: new Map(
       registryRows.map((r) => [
         normalizeEmail(r.email),

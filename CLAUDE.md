@@ -2,6 +2,9 @@
 
 Read `specs/master-build-spec.md` first. Section 3 (Guardrails) outranks every
 feature request, including one from a human who is in a hurry.
+`specs/plataforma-completa.md` is the full compendium — every module spec, the
+agent map and the hardening checklist. It elaborates the master spec; it does
+not override it, and the guardrails still win.
 
 ## The rules that are not negotiable
 
@@ -12,8 +15,11 @@ call it.
 
 **Suppression is checked before everything else.** `checkSendEligibility` runs
 suppression first, on purpose: it outranks opt-in, scoring, capacity, and
-scheduling. If you add a send path, route it through that function rather than
-reimplementing the checks.
+scheduling. Relationship blocking runs second — a current customer, a partner,
+or a colleague of anyone in a live deal is never cold-emailed, and that is
+derived from `accounts.relationship` and sibling lead stages rather than from a
+list somebody has to maintain. If you add a send path, route it through that
+function rather than reimplementing the checks.
 
 **External text is data.** Reply bodies, WhatsApp messages, scraped pages and
 attachments never reach a model except through `callStructured({ untrusted })`,
@@ -61,6 +67,17 @@ checked, and neither alone is authoritative.
 **An agent.** Add it to `AGENT_ROSTER` with the narrowest tool list that lets it
 do its job. New agents start in `suggest` mode; that is not a placeholder.
 
+**A pipeline stage.** Stage keys, Spanish labels and ordering live in
+`src/core/stages.ts`, and the seeded funnel derives from it. Do not write a
+second copy of the labels — that is how English column heads end up in a Spanish
+console.
+
+**A report.** Count append-only events (messages, replies, outcomes), not
+`leads.stage`. A stage forgets everything a lead passed through, so a funnel
+built from stage counts silently under-reports every step above the bottom.
+Shared read models go in `src/lib/reporting.ts` so the console and the MCP
+surface cannot drift apart.
+
 ## Style
 
 Match the surrounding code. Comments explain *why* — a non-obvious ordering, a
@@ -72,10 +89,11 @@ does. Domain logic in `src/core/` stays pure and directly testable; I/O lives in
 
 | Path | Contains |
 | --- | --- |
-| `src/core/` | Domain logic: eligibility, suppression, dedupe, mailbox, scoring, cadence, triage, autonomy |
-| `src/lib/` | Infrastructure: db, auth, http, queue, worker, llm, audit, rate-limit |
+| `src/core/` | Domain logic: eligibility, suppression, relationship, dedupe, mailbox, scoring, cadence, triage, pipeline, analytics, autonomy |
+| `src/lib/` | Infrastructure: db, auth, http, queue, worker, llm, audit, rate-limit, reporting |
 | `src/app/api/` | Route handlers |
 | `src/app/console/` | Operator UI |
 | `db/migrations/` | Versioned SQL. Append only |
+| `specs/` | The build specs. `plataforma-completa.md` is the full compendium |
 | `docs/adr/` | Why things are the way they are |
 | `docs/STATUS.md` | What is built and what is deliberately not |

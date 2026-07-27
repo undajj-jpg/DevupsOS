@@ -10,6 +10,11 @@ import {
   type AntiResendPolicy,
   type RegistryEntry,
 } from './dedupe';
+import {
+  checkRelationship,
+  type RelationshipBlockReason,
+  type RelationshipInput,
+} from './relationship';
 
 /**
  * The single pre-send gate (spec §3.7, §5).
@@ -26,6 +31,8 @@ export type EligibilityInput = {
   existingMessageForKey: { id: string } | null;
   suppression: readonly SuppressionEntry[];
   registryEntry: RegistryEntry | null;
+  /** Account relationship and sibling deal state; omit when unknown. */
+  relationship?: RelationshipInput;
   /** False for a cold first touch; true once the lead consented. */
   optIn: boolean;
   hasReplied: boolean;
@@ -36,6 +43,7 @@ export type EligibilityInput = {
 export type BlockReason =
   | 'invalid_email'
   | 'suppressed'
+  | RelationshipBlockReason
   | 'already_sent'
   | 'anti_resend'
   | 'replied';
@@ -70,6 +78,22 @@ export function checkSendEligibility(
       reason: 'suppressed',
       detail: `blocked by suppression entry ${suppressed.matchedValue} (${suppressed.reason})`,
     };
+  }
+
+  // Our own people, second. A customer or an account with a live deal is a
+  // perfectly deliverable address that nobody remembers to add to the
+  // suppression list, so the relationship itself does the blocking. Opted-in
+  // contacts are exempt: the rule is about cold outreach, and a customer who
+  // asked to hear from us has not been cold-emailed.
+  if (!input.optIn && input.relationship) {
+    const relationship = checkRelationship(input.relationship);
+    if (relationship.blocked) {
+      return {
+        eligible: false,
+        reason: relationship.reason,
+        detail: relationship.detail,
+      };
+    }
   }
 
   // Idempotency: the same dedupe key must never produce a second send, even if

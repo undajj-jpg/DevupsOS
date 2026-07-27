@@ -1,6 +1,7 @@
 import { agents, funnels } from '@/db/schema';
 import type { Tx } from '@/db/client';
 import { audit } from '@/lib/audit';
+import { DEFAULT_STAGES } from '@/core/pipeline';
 
 /**
  * Seeds a new org with the default funnel and the agent roster from spec §6.
@@ -10,16 +11,13 @@ import { audit } from '@/lib/audit';
  * in §10, which is a deliberate, audited change.
  */
 
-export const DEFAULT_FUNNEL_STAGES = [
-  { key: 'new', label: 'New', order: 0 },
-  { key: 'queued', label: 'Queued', order: 1 },
-  { key: 'contacted', label: 'Contacted', order: 2 },
-  { key: 'replied', label: 'Replied', order: 3 },
-  { key: 'meeting', label: 'Meeting', order: 4 },
-  { key: 'proposal', label: 'Proposal', order: 5 },
-  { key: 'won', label: 'Won', order: 6 },
-  { key: 'lost', label: 'Lost', order: 7 },
-];
+/**
+ * The seeded funnel is the canonical stage list, labels included. Writing the
+ * labels out again here is how the board ends up showing English column heads
+ * in a Spanish console — the funnel stores its own labels, so a second copy
+ * drifts the moment either side is touched.
+ */
+export const DEFAULT_FUNNEL_STAGES = DEFAULT_STAGES;
 
 /** The orchestrator plus the twelve specialists (§6), each tool-scoped. */
 export const AGENT_ROSTER: {
@@ -30,12 +28,19 @@ export const AGENT_ROSTER: {
   {
     key: 'orchestrator',
     name: 'Orchestrator',
-    allowedTools: ['get_stats', 'get_pipeline_stats', 'list_pending_leads'],
+    allowedTools: [
+      'get_stats',
+      'get_pipeline_stats',
+      'list_pending_leads',
+      'list_funnels',
+      'get_board',
+      'get_analytics',
+    ],
   },
   {
     key: 'concierge',
     name: 'Concierge (WhatsApp / voz)',
-    allowedTools: ['get_stats', 'get_briefing', 'get_board'],
+    allowedTools: ['get_stats', 'get_briefing', 'get_board', 'list_funnels'],
   },
   {
     key: 'sourcing',
@@ -60,12 +65,18 @@ export const AGENT_ROSTER: {
   {
     key: 'triage',
     name: 'Triage',
-    allowedTools: ['list_replies', 'classify_reply', 'set_stage'],
+    allowedTools: [
+      'list_replies',
+      'classify_reply',
+      'set_stage',
+      'get_board',
+      'move_lead',
+    ],
   },
   {
     key: 'scheduler',
     name: 'Agendador',
-    allowedTools: ['propose_slots', 'book_meeting'],
+    allowedTools: ['propose_slots', 'book_meeting', 'move_lead'],
   },
   {
     key: 'research',
@@ -80,12 +91,12 @@ export const AGENT_ROSTER: {
   {
     key: 'briefing',
     name: 'Briefing',
-    allowedTools: ['get_briefing', 'get_pipeline_stats'],
+    allowedTools: ['get_briefing', 'get_pipeline_stats', 'get_analytics'],
   },
   {
     key: 'deliverability',
     name: 'Guardián de entregabilidad',
-    allowedTools: ['get_stats', 'pause', 'resume'],
+    allowedTools: ['get_stats', 'pause', 'resume', 'get_analytics'],
   },
   {
     key: 'compliance',

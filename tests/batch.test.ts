@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planBatch, type BatchCandidate } from '@/core/batch';
+import { planBatch, type AccountState, type BatchCandidate } from '@/core/batch';
 import type { Mailbox } from '@/core/mailbox';
 
 const NOW = new Date('2026-07-26T12:00:00Z');
@@ -22,12 +22,21 @@ function candidate(
   leadId: string,
   email: string,
   score: number,
+  accountId: string | null = null,
 ): BatchCandidate {
-  return { leadId, contactId: `c-${leadId}`, email, score, optIn: false };
+  return {
+    leadId,
+    contactId: `c-${leadId}`,
+    accountId,
+    email,
+    score,
+    optIn: false,
+  };
 }
 
 const EMPTY = {
   suppressionEntries: [],
+  accounts: new Map<string, AccountState>(),
   registry: new Map(),
   existingKeys: new Set<string>(),
   repliedLeadIds: new Set<string>(),
@@ -133,6 +142,75 @@ describe('batch planning', () => {
     expect(first.planned).toHaveLength(1);
     expect(second.planned).toHaveLength(0);
     expect(second.skipped[0]?.reason).toBe('already_sent');
+  });
+
+  it('a customer account never consumes a mailbox slot either', () => {
+    const plan = planBatch({
+      campaignKey: 'daily',
+      candidates: [
+        candidate('customer', 'vp@acme.com', 99, 'acct-acme'),
+        candidate('clean', 'clean@x.com', 10),
+      ],
+      mailboxes: [mailbox('mb', 1)],
+      ...EMPTY,
+      accounts: new Map<string, AccountState>([
+        [
+          'acct-acme',
+          { name: 'Acme', relationship: 'customer', leadStages: [] },
+        ],
+      ]),
+    });
+
+    expect(plan.planned.map((p) => p.leadId)).toEqual(['clean']);
+    expect(plan.skipped.map((s) => s.reason)).toEqual(['existing_relationship']);
+  });
+
+  it('blocks a colleague of someone already at the meeting stage', () => {
+    const plan = planBatch({
+      campaignKey: 'daily',
+      candidates: [candidate('new-guy', 'cto@acme.com', 80, 'acct-acme')],
+      mailboxes: [mailbox('mb', 10)],
+      ...EMPTY,
+      accounts: new Map<string, AccountState>([
+        [
+          'acct-acme',
+          {
+            name: 'Acme',
+            relationship: 'prospect',
+            leadStages: [
+              { leadId: 'colleague', stage: 'meeting' },
+              { leadId: 'new-guy', stage: 'new' },
+            ],
+          },
+        ],
+      ]),
+    });
+
+    expect(plan.planned).toHaveLength(0);
+    expect(plan.skipped[0]?.reason).toBe('active_deal');
+  });
+
+  it('does not let a lead block itself', () => {
+    const plan = planBatch({
+      campaignKey: 'daily',
+      candidates: [candidate('solo', 'solo@acme.com', 80, 'acct-acme')],
+      mailboxes: [mailbox('mb', 10)],
+      ...EMPTY,
+      accounts: new Map<string, AccountState>([
+        [
+          'acct-acme',
+          {
+            name: 'Acme',
+            relationship: 'prospect',
+            // The candidate's own row is in the account's lead list, and it is
+            // at an active-deal stage. Only siblings may block.
+            leadStages: [{ leadId: 'solo', stage: 'meeting' }],
+          },
+        ],
+      ]),
+    });
+
+    expect(plan.planned.map((p) => p.leadId)).toEqual(['solo']);
   });
 
   it('plans nothing when no mailbox has capacity', () => {

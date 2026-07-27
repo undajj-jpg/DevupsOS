@@ -14,6 +14,7 @@ import {
 import { withOrgContext } from '@/db/client';
 import { currentSession, type Session } from '@/lib/auth/session';
 import { effectiveDailyCap, type Mailbox, type WarmupStage } from '@/core/mailbox';
+import { analyticsFor, boardFor } from '@/lib/reporting';
 
 /**
  * Read helpers for server components. Each opens an RLS-scoped transaction, so
@@ -189,6 +190,18 @@ export async function loadReplies(session: Session) {
       .orderBy(desc(replies.createdAt))
       .limit(100),
   );
+}
+
+/** Kanban board for one funnel (plataforma-completa §12). */
+export async function loadBoard(session: Session, funnelId?: string) {
+  return withOrgContext(ctx(session), (tx) =>
+    boardFor(tx, session.orgId, funnelId),
+  );
+}
+
+/** Conversion economics (master spec §8; plataforma-completa §25). */
+export async function loadAnalytics(session: Session) {
+  return withOrgContext(ctx(session), (tx) => analyticsFor(tx, session.orgId));
 }
 
 export async function loadAgents(session: Session) {

@@ -6,8 +6,10 @@ import { usePathname } from 'next/navigation';
 const NAV = [
   { href: '/console', label: 'Panel' },
   { href: '/console/leads', label: 'Leads' },
+  { href: '/console/pipeline', label: 'Pipeline' },
   { href: '/console/approvals', label: 'Aprobaciones' },
   { href: '/console/replies', label: 'Respuestas' },
+  { href: '/console/analytics', label: 'Conversión' },
   { href: '/console/agents', label: 'Agentes' },
 ];
 

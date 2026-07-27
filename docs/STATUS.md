@@ -1,4 +1,10 @@
-# Build status against the master spec
+# Build status against the spec
+
+Two documents are in play. `specs/master-build-spec.md` is the original prompt
+this repo was built from. `specs/plataforma-completa.md` is the full compendium
+— the same master spec plus the per-module specs for every phase, the twelve-
+agent map, and the hardening checklist. Where they differ, the compendium is
+more detailed, not different in intent.
 
 The spec (§8) prescribes an order and says explicitly: build the núcleo first
 and validate the economics before adding layers. This is where that stands.
@@ -22,6 +28,7 @@ and validate the economics before adding layers. This is where that stands.
 | --- | --- |
 | Leads + import | Done — `POST /api/leads`, dedupes by (org, email) |
 | Dedup / anti-resend / suppression | Done — blocking, ordered, tested |
+| Relationship suppression (customers, partners, live deals) | Done — `src/core/relationship.ts`, checked second in `checkSendEligibility` |
 | Multi-mailbox with warmup, caps, rotation, health | Done — `src/core/mailbox.ts` |
 | Signal-based personalization | Done — `src/core/personalization.ts`, generic fallback |
 | Basic pipeline | Done — funnels, stages, console views |
@@ -32,7 +39,7 @@ and validate the economics before adding layers. This is where that stands.
 | **Gmail mailbox scan** | **Not implemented** — see below |
 | Sourcing connectors (Gojiberry / Apollo / TheirStack) | **Not implemented** — import API accepts their output |
 | Anymail Finder verification | **Not implemented** — `email_verified` is set by the importer |
-| Cost-per-meeting measurement | **Not implemented** — `outcomes` table exists; no reporting yet |
+| Cost-per-meeting measurement | Done for model spend — `/console/analytics`. Sourcing and enrichment spend is not observable because those integrations do not exist yet, and the page says so |
 
 ### Why Gmail delivery is deliberately absent
 
@@ -52,12 +59,37 @@ credentials, and the anti-resend registry is currently fed at approval time
 rather than by a continuous inbox sweep. That is correct but narrower — it
 covers engine sends, not messages a rep wrote by hand.
 
-## Fases 2–4: not started
+## Fase 2 — Conversión: started
 
-Conversion (voice-matched copywriter, calendar/scheduling, talent MCP client,
-analytics), Intelligence (pgvector memory, entity resolution, Jarvis, skills
-registry), and Autonomy are untouched. Per §8 they come after the núcleo's
-economics are measured, and there is nothing to measure yet.
+| Item | Status |
+| --- | --- |
+| Pipeline board / kanban / multiple funnels | Done — `/console/pipeline`, MCP `list_funnels` / `get_board` / `move_lead` |
+| Analytics + A/B testing | Done — `/console/analytics`, MCP `get_analytics` |
+| Voice-matched copywriter (`voice_profiles`, edit-diff learning) | Not implemented |
+| Calendar / scheduling (Google, Outlook, Meet) | Not implemented |
+| Talent MCP client, matching, shortlists | Not implemented |
+
+The two that are done are the two that need no third-party credentials, and
+§8 puts measurement first: the conversion funnel is the instrument the phase
+gate is supposed to read. The other three each wait on an OAuth grant or on the
+talent system's MCP server, and building them blind would mean guessing at
+someone else's tool names.
+
+### Why the board is not a full drag-and-drop CRM
+
+Cards move between columns, and every move is audited and writes an outcome
+event. What is deliberately absent: transition automations that fire on a move
+(the spec's "mover a Reunión crea un hold en calendario"), because there is no
+calendar integration to hold anything in, and configurable funnel editing,
+because a funnel whose stages can be renamed at will needs a migration story for
+the leads sitting in the old stages.
+
+## Fases 3–4: not started
+
+Intelligence (pgvector memory, entity resolution, contact 360, briefing hub,
+document hub, topic auto-labelling, Jarvis, skills registry) and Autonomy are
+untouched. Per §8 they come after the núcleo's economics are measured, and the
+instrument to measure them only just landed.
 
 ## Autonomy gate checklist (§10)
 

@@ -42,6 +42,60 @@ describe('send eligibility (guardrails §3.6, §3.7)', () => {
     if (!result.eligible) expect(result.reason).toBe('suppressed');
   });
 
+  it('blocks a current customer even with an empty suppression list', () => {
+    const result = checkSendEligibility({
+      ...base,
+      relationship: { relationship: 'customer', accountName: 'Acme' },
+    });
+    expect(result.eligible).toBe(false);
+    if (!result.eligible) {
+      expect(result.reason).toBe('existing_relationship');
+      expect(result.detail).toContain('Acme');
+    }
+  });
+
+  it('blocks a colleague of an account with a live deal', () => {
+    const result = checkSendEligibility({
+      ...base,
+      relationship: {
+        relationship: 'prospect',
+        siblingStages: ['new', 'proposal'],
+      },
+    });
+    expect(result.eligible).toBe(false);
+    if (!result.eligible) expect(result.reason).toBe('active_deal');
+  });
+
+  it('outranks the already-sent guard, so the report names the real cause', () => {
+    const result = checkSendEligibility({
+      ...base,
+      relationship: { relationship: 'customer' },
+      existingMessageForKey: { id: 'msg-1' },
+    });
+    expect(result.eligible).toBe(false);
+    if (!result.eligible) expect(result.reason).toBe('existing_relationship');
+  });
+
+  it('exempts opted-in contacts — the rule is about cold outreach', () => {
+    const result = checkSendEligibility({
+      ...base,
+      optIn: true,
+      relationship: { relationship: 'customer' },
+    });
+    expect(result.eligible).toBe(true);
+  });
+
+  it('lets an ordinary prospect through', () => {
+    const result = checkSendEligibility({
+      ...base,
+      relationship: {
+        relationship: 'prospect',
+        siblingStages: ['new', 'contacted', 'lost'],
+      },
+    });
+    expect(result.eligible).toBe(true);
+  });
+
   it('refuses a second send for the same dedupe key', () => {
     const result = checkSendEligibility({
       ...base,
