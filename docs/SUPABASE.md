@@ -8,6 +8,13 @@ isolation.
 
 Supabase → Project Settings → Database → Connection string.
 
+**Get the hostname from the dashboard — do not construct it.** The regional
+pooler endpoints (`aws-0-<region>` and `aws-1-<region>`) both resolve in DNS
+regardless of which one your project lives on, so a guess fails at runtime with
+`ENOTFOUND tenant/user <user>.<ref> not found`. That error means the pooler
+answered but does not host this tenant: you have the wrong prefix, not the
+wrong credentials.
+
 | Use | Port | Why |
 | --- | --- | --- |
 | **App** (`DATABASE_URL` on Vercel) | **6543** (Supavisor, transaction mode) | Serverless opens and drops connections constantly; the direct endpoint runs out. Transaction mode is also IPv4-reachable, which the direct endpoint may not be. |
