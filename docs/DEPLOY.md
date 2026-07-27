@@ -73,17 +73,54 @@ npx vercel --prod
 
 ## 5. Cron
 
-`vercel.json` declares three schedules; Vercel registers them on deploy and
-sends `CRON_SECRET` as a bearer token.
+Vercel registers the schedules in `vercel.json` on deploy and sends
+`CRON_SECRET` as a bearer token on each invocation.
+
+**The committed schedule is Hobby-compatible**, because Hobby allows at most
+two cron jobs and each may run **at most once per day**. A `vercel.json` with a
+sub-daily expression is *rejected at deploy time* — the deployment fails with
+`cron_jobs_limits_reached`; it is not silently downgraded.
 
 | Path | Schedule | Does |
 | --- | --- | --- |
-| `/api/cron/tick` | every 5 min | Drains the job queue, reclaims stale jobs |
-| `/api/cron/scan-mailboxes` | hourly | Enqueues mailbox scans, health refresh, due follow-ups |
 | `/api/cron/daily-batch` | 11:00 UTC, Mon–Fri | Prepares each org's drafts for review |
+| `/api/cron/tick` | 12:00 UTC daily | Drains the job queue, reclaims stale jobs |
 
-Cron is a Vercel plan feature; on Hobby the schedules run once daily regardless
-of the expression. Confirm your plan supports the cadence you need.
+Daily draining is adequate today: no job in the queue is latency-sensitive
+while delivery is unwired. It will not be adequate once mail is being sent.
+
+### Restoring the real cadence
+
+On **Pro**, replace the `crons` array with:
+
+```json
+[
+  { "path": "/api/cron/tick",           "schedule": "*/5 * * * *" },
+  { "path": "/api/cron/scan-mailboxes", "schedule": "0 * * * *" },
+  { "path": "/api/cron/daily-batch",    "schedule": "0 11 * * 1-5" }
+]
+```
+
+On **Hobby**, drive the endpoints from any external scheduler instead — GitHub
+Actions, cron-job.org, a box you already run. They are plain authenticated HTTP
+endpoints, so this preserves the §3.6 guardrail that the scheduler is real
+infrastructure rather than an in-process timer:
+
+```yaml
+# .github/workflows/tick.yml
+on:
+  schedule: [{ cron: '*/5 * * * *' }]
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS -X GET "$APP_URL/api/cron/tick" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+```
 
 ## 6. Verify the deployment
 
